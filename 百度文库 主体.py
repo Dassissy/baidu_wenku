@@ -93,7 +93,7 @@ def get_clean_window(num_of_pages,wenku_id):#登录百度文库，点击“展�
                               element.parentNode.removeChild(element)''',wm)
                               """
         
-def get_screenshot(scr_list,num_of_pages,title = ' '):
+def get_screenshot(scr_list,num_of_pages,title):
     #不需要这部分了
     #js_0 = "var q=document.documentElement.scrollTop=" + str(height//2)#下拉引出奇怪东西
     #driver.execute_script(js_0)
@@ -120,7 +120,9 @@ def get_screenshot(scr_list,num_of_pages,title = ' '):
     times = height//page_height
 
     driver.execute_script("var q=document.documentElement.scrollTop=0")#回到顶部
-    for i in range(int(times*1.1+1)):
+    if times <= 7:
+        times += 1#可能出现截不到底的情况
+    for i in range(int(times*1.1)):
         js = "var q=document.documentElement.scrollTop=" + str(i*page_height)
         driver.execute_script(js)
         scr_path = "D://wenku_pics//" + title + "//"
@@ -130,14 +132,26 @@ def get_screenshot(scr_list,num_of_pages,title = ' '):
         scr_list.append(scr_name)
         time.sleep(0.1)
         driver.save_screenshot(scr_name)
+        
+    img_I = Image.open(scr_list[-1])
+    img_next_I = Image.open(scr_list[-2])
+    while img_I == img_next_I:#先删除重复图片
+        os.remove(scr_list[-1])#先删图
+        del scr_list[-1]#再删路径
+        img_I = Image.open(scr_list[-1])
+        img_next_I = Image.open(scr_list[-2])
+        
+        
     """不需要了
     #删除后三张图
     for i in range(2):#如此往复3次
         path = scr_list[-1]#最后一张图被删除
         os.remove(path)
         scr_list.pop(-1)#最后一张图被弹出"""
+    
 
-def del_pic_in_pic(wide,img):
+
+def del_pic_in_pic(wide,img):#这个部分要重做
     img_list = img.load()#获取像素点
     the_previous_is = False#前一个像素点是图片中的吗
     l,w = img.size
@@ -175,7 +189,7 @@ def del_pic_in_pic(wide,img):
             continue
     #img.show()
     
-def judge(img,next_img,pics_in=True):#判断图片是否完整 
+def judge(img,next_img,pics_in):#判断图片是否完整 
     threshold = 210#定义灰度界限
     table = []
     for i in range(256):
@@ -185,8 +199,8 @@ def judge(img,next_img,pics_in=True):#判断图片是否完整
         table.append(1)
          
     if pics_in:#如果有图片在页面中
-        del_pic_in_pic(wide=15,img=img)#防止图中图影响判断
-        del_pic_in_pic(wide=15,img=next_img)
+        del_pic_in_pic(wide=20,img=img)#防止图中图影响判断
+        del_pic_in_pic(wide=20,img=next_img)
         
     img = img.convert('L')
     bw_img = img.point(table, '1')#图片二值化
@@ -223,8 +237,9 @@ def get_lines(im,num_of_lines,pics_in):
     l,w = im.size
     change_times = 0
     judgement = True
+    first_i = 0#否则图片间会有没删掉的空白部分
     for i in range(w):
-        if i <= w//3:
+        if i < w:#牺牲时间，防止重复
             box = (0,i,l,i+1)
             IM = im.crop(box)
             next_IM = im.crop((0,i,l,i+1))
@@ -234,15 +249,21 @@ def get_lines(im,num_of_lines,pics_in):
             else:
                 judgement = JUDGEMENT#若不同，执行下头的代码
             change_times += 1#记变换一次
-            if change_times == 1:
-                first_i = i#若第一次变换，记录坐标
-            elif change_times%2 == 0:#若为偶数次变换，则是截到了整行
+            #if change_times == 1:
+                #first_i = i#若第一次变换，记录坐标
+            if change_times%2 == 0:#若为偶数次变换，则是截到了整行
+                line = 1#有一行字了
+                last_i = i
                 if change_times/2 == num_of_lines:#变换次数除以2，即为截到的行数
                     last_i = i#记录下坐标
                     break
-        else:#可能整页都是图片
-            first_i = 0
-            last_i = 15
+        elif line:
+            pass
+        else:#整页都是图片
+            if w <= 25:
+                last_i = w
+            else:
+                last_i = 30
     box = (0,first_i,l,last_i)
     im_lines = im.crop(box)#裁剪
     im_lines = im_lines.rotate(180)#翻转
@@ -251,13 +272,13 @@ def get_lines(im,num_of_lines,pics_in):
 def duplicate_removal(path, next_path, pics_in):#去重
     im = Image.open(path)
     next_im = Image.open(next_path)
-    num_of_lines = 1
+    num_of_lines = 2
     im_lines = get_lines(im=im,num_of_lines=num_of_lines,pics_in=pics_in)
     length_of_lines = im_lines.size[1]
     l,w = next_im.size
     for i in range(w):
         if i+length_of_lines == w-1:
-            del_path = next_path#整张重复，连同后面的一起删了
+            del_path = next_path#整张重复，连同后面的一起删了————这部分实际上已经没有作用了
             break
         box = (0,i,l,i+length_of_lines)
         next_im_lines = next_im.crop(box)
@@ -567,7 +588,7 @@ def main(wenku_id,pics_in):
     #out(title,html_dict)#输出成文档
 
 wenku_id = input("输入文库id，然后等输出就好了，可能会比较慢：")
-pics_in = input("页面中是否会出现较大的图片（大于1/4页面)？否则回车，是则任意键：")
+pics_in = input("页面中是否会出现较大的图片（大于1/4页面)(图片的存在会使精度降低）？否则回车，是则任意键：")
 if pics_in:
     pics_in = True
 else:
