@@ -8,10 +8,14 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 import os, shutil#文件操作
 from PIL import Image#图片操作
+import threading#多线程优化
 
 def get_info(wenku_id):#拿到一些信息
     url = "https://wenku.baidu.com/view/" + wenku_id + ".html"
-    r = requests.get(url)
+    try:
+        r = requests.get(url)
+    except:
+        return "ERROR"
     r.encoding = "utf-8"
     soup = BeautifulSoup(r.text,"html.parser")
     title = soup.find('title').string
@@ -21,21 +25,31 @@ def get_info(wenku_id):#拿到一些信息
     num_of_pages = divider.find_next().string[:-1]
     return title,num_of_pages
 
-def get_clean_window(num_of_pages,wenku_id):#登录百度文库，点击“展开”，并将不需要的页面元素（如广告）删除
-    url = "https://wenku.baidu.com/view/" + wenku_id + ".html"
-    with open(r'D:\python\wenku_cookie.txt','r') as f:
+def sign_in(cookie_path,url):
+    with open(cookie_path,'r') as f:
         cookie_string = f.read()
         cookie_string = re.sub("true","True",cookie_string)
         cookie_string = re.sub("false","False",cookie_string)
         cookie_list = list(eval(cookie_string))
-    driver.get(url)
     for cookie in cookie_list:
         if cookie['sameSite']:
             cookie.pop('sameSite')
         driver.add_cookie(cookie)
     driver.get(url)#打开页面
-    time.sleep(3)
-    try:#爬多了就不弹了
+    
+def get_clean_window(num_of_pages,wenku_id,cookie_path):#登录百度文库，点击“展开”，并将不需要的页面元素（如广告）删除
+    url = "https://wenku.baidu.com/view/" + wenku_id + ".html"
+    driver.get(url)
+    
+    try:
+        if is_sign_in:#登录过就无需重复登录
+            pass
+    except UnboundLocalError:#实际的判断语句是这句
+        sign_in(cookie_path,url)
+        is_sign_in = True
+    
+    time.sleep(3)#这个3秒很重要
+    try:#可能没有
         card = driver.find_element(By.CLASS_NAME,"experience-card-content")#弹出奇怪的东西
         close = card.find_element(By.CLASS_NAME,"close-btn")
         close.click()#关掉
@@ -43,9 +57,10 @@ def get_clean_window(num_of_pages,wenku_id):#登录百度文库，点击“展�
     except:
         pass
     try:
-        read_all = driver.find_element(By.CLASS_NAME,"read-all")#展开
-        driver.execute_script("arguments[0].click();", read_all)#聚焦并点击
-    except:#可能没有这个元素
+        while True:
+            read_all = driver.find_element(By.CLASS_NAME,"read-all")#展开
+            driver.execute_script("arguments[0].click();", read_all)#聚焦并点击
+    except:#可能不需要展开，也可能要展开多次(页数大于50)
         pass
     remove_list = ["//div[@class='header-wrapper no-full-screen new-header']",
                    "//div[@class='left-wrapper zoom-scale']/div[@class='no-full-screen']",
@@ -69,24 +84,44 @@ def get_clean_window(num_of_pages,wenku_id):#登录百度文库，点击“展�
         driver.execute_script("""var element = arguments[0];
                               element.parentNode.removeChild(element)""",hx)
 #问题：水印可以被定位，但无法被删除，原因：加密
-        
-def get_screenshot(scr_list,num_of_pages,title):
+
+def make_path(scr_path_):
+    scr_path_list = scr_path_.split("//")[:-1]
+    PATH = scr_path_list[0]
+    for i in range(1,len(scr_path_list)):
+        PATH = PATH + r"//" + scr_path_list[i]
+        if not os.path.exists(PATH):
+            os.mkdir(PATH)
+    
+def get_screenshot(scr_list,num_of_pages,title,scr_path_):
     driver.execute_script("var q=document.documentElement.scrollTop=0")#回到顶部
     try:
         driver.maximize_window()#全屏显示
     except:
         pass
-    time.sleep(1)
+    #time.sleep(1)
     
     page_height = 680#实际为730,截多一点
     
     times = int(int(num_of_pages)*2.4)
     #type(num_of_pages) = str, 已知一个23页的图片，可截出38张图，38/23 = 1.65，可是要*2.4才能保证拉到底端
     
-    for i in range(times):#加载图片
+    for i in range(times+1):#加载图片
         js = "var q=document.documentElement.scrollTop=" + str(i*page_height)
         driver.execute_script(js)
         time.sleep(0.2)
+        if i == times-1:
+            h1 = driver.find_element(By.TAG_NAME,"body").size["height"]
+        if i == times:
+            h2 = driver.find_element(By.TAG_NAME,"body").size["height"]
+            if h2 != h1:#如果页面高度仍然在变化
+                while not h2 == h1:#循环至不变为止
+                    i += 1
+                    js = "var q=document.documentElement.scrollTop=" + str(i*page_height)
+                    driver.execute_script(js)
+                    time.sleep(0.2)
+                    h3 = driver.find_element(By.TAG_NAME,"body").size["height"]
+                    h1, h2 = h2, h3
     
     height = driver.find_element(By.TAG_NAME,"body").size["height"]
     times = height//page_height
@@ -94,10 +129,13 @@ def get_screenshot(scr_list,num_of_pages,title):
     driver.execute_script("var q=document.documentElement.scrollTop=0")#回到顶部
     if times <= 7:#如果文档比较小
         times += 2#可能出现截不到底的情况
-    for i in range(times+1):#总是截得少一点
+    for i in range(times+1):
         js = "var q=document.documentElement.scrollTop=" + str(i*page_height)
         driver.execute_script(js)
-        scr_path = "D://wenku_pics//" + title + "//"
+        
+        make_path(scr_path_)
+        
+        scr_path = scr_path_ + title + "//"
         if not os.path.exists(scr_path):
             os.mkdir(scr_path)
         scr_name = scr_path + str(i+1) + ".png"
@@ -112,44 +150,6 @@ def get_screenshot(scr_list,num_of_pages,title):
         del scr_list[-1]#再删路径
         img_I = Image.open(scr_list[-1])
         img_next_I = Image.open(scr_list[-2])
-    
-def del_pic_in_pic(wide,img):#这个部分要重做
-    img_list = img.load()#获取像素点
-    the_previous_is = False#前一个像素点是图片中的吗
-    l,w = img.size
-    for i in range(l):
-        point_data = img_list[i,0]
-        #print(("point_data is:{}").format(point_data))
-        if point_data[0] <= 245 or point_data[1] <= 245 or point_data[2] <= 245:
-            if not the_previous_is:#即 == False
-                first_p = i#记录第一个
-                the_previous_is = True
-            elif i == l-1:#假如已经是最后一个像素了
-                last_p = i#记录最后一个
-                if last_p - first_p >= wide:
-                    pass
-                else:#若不大于wide，就不执行下一步了
-                    continue
-                box = (first_p,0,last_p,1)
-                new_pic = Image.new("1",(last_p-first_p,1),"white")
-                img.paste(new_pic,box)#变成白色的
-                the_previous_is = False
-            elif the_previous_is:#即 == True
-                continue
-        elif the_previous_is:#即 == True:
-            last_p = i#记录最后一个
-            if last_p - first_p >= wide:
-                pass
-            else:
-                continue
-            box = (first_p,0,last_p,1)
-            new_pic = Image.new("1",(last_p-first_p,1),"white")
-            img.paste(new_pic,box)#变成白色的
-            the_previous_is = False
-            continue
-        else:
-            continue
-    #img.show()
     
 def judge(img,next_img,pics_in):#判断图片是否完整 
     threshold = 210#定义灰度界限
@@ -221,7 +221,7 @@ def get_lines(im,num_of_lines,pics_in):
             elif line:
                 pass
             else:#整页都是图片
-                if w <= 25:
+                if w <= 50:
                     last_i = w
                 else:
                     last_i = 50
@@ -259,6 +259,7 @@ def crop_pictures(scr_list,pics_in):
         l,w = im.size
         box = (0,0,l-25,w)
         im = im.crop(box)#削去下拉条
+        '''不需要再判断图片是否完整了
         l,w = im.size
         for i in range(w):#自上而下遍历图片的每一行
             box = (0,i,l,i+1)#左上右下
@@ -289,6 +290,8 @@ def crop_pictures(scr_list,pics_in):
             else:
                 continue
         #不转了
+        '''
+        im = im.rotate(180)#弥补原先程序（已删）中的翻转
         #接下来进行竖直分割
         l,w = im.size
         l_list = []
@@ -394,29 +397,36 @@ def paste_images(im_path):
         
     img_0.save(im_path+".png")
 
-def web_crawler(wenku_id,pics_in):
+def web_crawler(wenku_id,pics_in,scr_path_,cookie_path):
     title,num_of_pages = get_info(wenku_id=wenku_id)#首先拿到标题和总页数
-    get_clean_window(wenku_id=wenku_id,num_of_pages=num_of_pages)#把窗口的各种影响阅读的弹窗清一遍
+    get_clean_window(wenku_id=wenku_id,num_of_pages=num_of_pages,cookie_path=cookie_path)#把窗口的各种影响阅读的弹窗清一遍
     time.sleep(1)
     scr_list = []
-    get_screenshot(scr_list,num_of_pages,title)#屏幕截图
+    get_screenshot(scr_list,num_of_pages,title,scr_path_)#屏幕截图
+    return scr_list,pics_in,title
+    
+def img_process(scr_list,pics_in,title,scr_path_):#后台进程
     crop_pictures(scr_list,pics_in)#将不必要的部分裁去
-    paste_images(im_path="D://wenku_pics//"+title)#传入文件夹名称
-    shutil.rmtree("D://wenku_pics//"+title)#删除文件夹
+    paste_images(im_path= scr_path_ +title)#传入文件夹名称
+    shutil.rmtree(scr_path_ + title)#删除文件夹
 
-def main(id_list):
+def main(id_list,scr_path_,cookie_path):
     global driver#驱动仅有一个，故直接全局化
     driver = webdriver.Chrome()#用谷歌,只能用谷歌,用火狐的话要改好多
     
     if len(id_list) == 1:
-        web_crawler(id_list[0],True)
+        scr_list,pics_in,title = web_crawler(id_list[0],True,scr_path_,cookie_path)
         driver.quit()
+        img_process(scr_list,pics_in,title,scr_path_)
     else:
         for i in range(len(id_list)):
             try:
-                web_crawler(id_list[i],True)
+                scr_list,pics_in,title = web_crawler(id_list[i],True,scr_path_,cookie_path)
                 if i == len(id_list)-1:
                     driver.quit()
+                #img_process(scr_list,pics_in,title,scr_path_)#无多线程优化
+                threading.Thread(target=img_process, args=(scr_list,pics_in,title,scr_path_)).start()#多线程优化
+                continue
             except:
                 title, num_of_pages = get_info(id_list[i])
                 print("id为“{}”的文档出错，其标题为：“{}”".format(id_list[i], title))
