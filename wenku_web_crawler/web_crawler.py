@@ -111,13 +111,14 @@ def get_screenshot(scr_list, num_of_pages, title, scr_path_):
         pass
     # time.sleep(1)
 
-    page_height = 680  # 实际为730,截多一点
-
-    times = int(int(num_of_pages) * 2.4)
-    # type(num_of_pages) = str, 已知一个23页的图片，可截出38张图，38/23 = 1.65，可是要*2.4才能保证拉到底端
+    screen_height = 680  # 实际为730,截多一点
+    page_height = driver.find_element(By.ID, "pageNo-1").size["height"]
+    page_height_all = page_height * int(num_of_pages)
+    times = int(page_height_all / screen_height)  # FIXME 可能出错
+    # type(num_of_pages) = str, 注意：文字文档和图档的页高并不相同
 
     for i in range(times + 1):  # 加载图片
-        js = "var q=document.documentElement.scrollTop=" + str(i * page_height)
+        js = "var q=document.documentElement.scrollTop=" + str(i * screen_height)
         driver.execute_script(js)
         time.sleep(0.2)
         if i == times - 1:
@@ -127,20 +128,20 @@ def get_screenshot(scr_list, num_of_pages, title, scr_path_):
             if h2 != h1:  # 如果页面高度仍然在变化
                 while not h2 == h1:  # 循环至不变为止
                     i += 1
-                    js = "var q=document.documentElement.scrollTop=" + str(i * page_height)
+                    js = "var q=document.documentElement.scrollTop=" + str(i * screen_height)
                     driver.execute_script(js)
                     time.sleep(0.2)
                     h3 = driver.find_element(By.TAG_NAME, "body").size["height"]
                     h1, h2 = h2, h3
 
     height = driver.find_element(By.TAG_NAME, "body").size["height"]
-    times = height // page_height
+    times = height // screen_height
 
     driver.execute_script("var q=document.documentElement.scrollTop=0")  # 回到顶部
     if times <= 7:  # 如果文档比较小
         times += 2  # 可能出现截不到底的情况
     for i in range(times + 1):
-        js = "var q=document.documentElement.scrollTop=" + str(i * page_height)
+        js = "var q=document.documentElement.scrollTop=" + str(i * screen_height)
         driver.execute_script(js)
 
         make_path(scr_path_)
@@ -440,16 +441,17 @@ def main(id_list, scr_path_, cookie_path):
         img_process(scr_list, pics_in, title, scr_path_)
     else:
         for i in range(len(id_list)):
+            scr_list, pics_in, title = web_crawler(id_list[i], True, scr_path_, cookie_path)
             try:
                 if i == len(id_list) - 1:
+                    threading.Thread(target=img_process, args=(scr_list, pics_in, title, scr_path_)).start()  # 多线程优化
                     driver.quit()
-                else:  # 每次爬取都重开一遍浏览器
+                else:  # FIXME 每次爬取都重开一遍浏览器，不是很好的办法
+                    threading.Thread(target=img_process, args=(scr_list, pics_in, title, scr_path_)).start()  # 多线程优化
+                    # img_process(scr_list,pics_in,title,scr_path_)#无多线程优化
                     driver.quit()
                     driver = webdriver.Chrome()  # 重开浏览器
                     isnt_sign_in = True  # 登录信息随之失效
-                    scr_list, pics_in, title = web_crawler(id_list[i], True, scr_path_, cookie_path)
-                # img_process(scr_list,pics_in,title,scr_path_)#无多线程优化
-                threading.Thread(target=img_process, args=(scr_list, pics_in, title, scr_path_)).start()  # 多线程优化
                 continue
             except:
                 title, num_of_pages = get_info(id_list[i])

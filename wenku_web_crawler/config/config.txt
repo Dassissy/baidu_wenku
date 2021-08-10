@@ -1,1 +1,1 @@
-{'cookie_path': 'D:\\python\\wenku_cookie.txt', 'scr_path': 'D://wenku_pics//', 'scr_name': 'test3'}
+{'cookie_path': 'D:\\python\\wenku_cookie.txt', 'scr_path': 'D://wenku_pics//', 'scr_name': 'test5'}

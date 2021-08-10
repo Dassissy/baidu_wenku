@@ -126,19 +126,19 @@ def export_id(id_name_e):
     ID_list = []  # 先删除出错id
     for ID in id_list:
         if not ID == '':
-            ID_list.append("{}:{}/{}页".format(ID, get_info(ID)))
+            t, n = get_info(ID)
+            ID_list.append("{}:{}/{}页".format(ID, t, n))
 
+    export_l = ''
     if ID_list:
         with open(Path, "w") as f:
             for ID in ID_list:
                 f.write(ID + "\n")
             f.close()
-    
-        export_l = Label(main_entry_frame, text="已导出")
-        export_l.grid(column=3, row=4)
+            
     else:
         export_l = Label(main_entry_frame, text="无id！！")
-        export_l.grid(column=3, row=4)
+        export_l.grid(column=4, row=2)
         
         
 def import_id(id_path_e, id_name_e):
@@ -158,8 +158,10 @@ def import_id(id_path_e, id_name_e):
     if len(id_list) == 1:
         id0 = -1
     else:
-        for i in range(-1, -len(id_list), -1):  # 步长-1意为倒数
-            if id_list[i] == "":
+        for i in range(-1, -len(id_list)-1, -1):  # 步长-1意为倒数
+            if i == -len(id_list):  # 若列表全空如: ['', '', '', '']
+                id0 = i
+            elif id_list[i] == "":
                 continue
             else:
                 id0 = i+1  # 若id_list: list = [1, 2, 3, '', 5, 6, '', '', ''], id0 = -3
@@ -247,7 +249,8 @@ def make_main_entry():
     id_path_e = Entry(main_entry_frame)
     id_path_e.grid(column=3, row=4)
     Label(main_entry_frame, text="""在下方输入导入id的绝对地址
-    （带引号）""").grid(column=3, row=3)
+    （带引号）
+    也可留空，此时会检测id_list的导出位置""").grid(column=3, row=3)
     import_id_btn = Button(main_entry_frame, text="点此导入id", command=lambda: import_id(id_path_e, id_name_e))
     import_id_btn.grid(column=3, row=5)
     
