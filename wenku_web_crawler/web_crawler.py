@@ -441,16 +441,13 @@ def main(id_list, scr_path_, cookie_path):
     else:
         for i in range(len(id_list)):
             try:
-                t_start = time.time()
-                scr_list, pics_in, title = web_crawler(id_list[i], True, scr_path_, cookie_path)
-                t_end = time.time()
-                run_time = t_end - t_start
                 if i == len(id_list) - 1:
                     driver.quit()
-                elif run_time > 200:  # 运行时间超过200秒
+                else:  # 每次爬取都重开一遍浏览器
                     driver.quit()
                     driver = webdriver.Chrome()  # 重开浏览器
                     isnt_sign_in = True  # 登录信息随之失效
+                    scr_list, pics_in, title = web_crawler(id_list[i], True, scr_path_, cookie_path)
                 # img_process(scr_list,pics_in,title,scr_path_)#无多线程优化
                 threading.Thread(target=img_process, args=(scr_list, pics_in, title, scr_path_)).start()  # 多线程优化
                 continue

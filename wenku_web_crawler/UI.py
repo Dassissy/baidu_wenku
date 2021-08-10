@@ -49,7 +49,7 @@ def save_btn(e, x, y):  # 保存按钮
     return save_btn
 
 
-def continue_this_part(x, y, y_btn, finish_btn):  # 继续输入按钮
+def continue_this_part(x, y):  # 继续输入按钮
     id_list.append('')  # 在id_list中为每个输入框留下位置
     y_btn.destroy()
     finish_btn.destroy()
@@ -97,12 +97,12 @@ def begin(x, y):  # 开始爬取
 
 
 def yes_btn(x, y):
-    global f_l
+    global f_l, y_btn, finish_btn
     f_l = Label(main_entry_frame, text="""爬虫已启动过，若不需要导出id，请关闭这个窗体
                 还需要爬取的话，请再次点击“合成爬取方案”""")
     finish_btn = Button(main_entry_frame, text="开始爬取，记得要保存哦！", command=lambda: begin(x, y))
     finish_btn.grid(column=x, row=y)
-    y_btn = Button(main_entry_frame, text="继续输入id点这里！", command=lambda: continue_this_part(x, y, y_btn, finish_btn))
+    y_btn = Button(main_entry_frame, text="继续输入id点这里！", command=lambda: continue_this_part(x, y))
     y_btn.grid(column=x + 1, row=y)
 
 
@@ -126,7 +126,7 @@ def export_id(id_name_e):
     ID_list = []  # 先删除出错id
     for ID in id_list:
         if not ID == '':
-            ID_list.append(ID)
+            ID_list.append("{}:{}/{}页".format(ID, get_info(ID)))
 
     if ID_list:
         with open(Path, "w") as f:
@@ -139,6 +139,83 @@ def export_id(id_name_e):
     else:
         export_l = Label(main_entry_frame, text="无id！！")
         export_l.grid(column=3, row=4)
+        
+        
+def import_id(id_path_e, id_name_e):
+    if id_name_e.get():
+        id_name = id_name_e.get()
+    else:
+        id_name = "id_list"
+        
+    if not id_path_e.get():  # 若id_path为空，则使用导出路径
+        id_path = scr_path + scr_name + "//" + id_name + ".txt"
+    else:
+        id_path = id_path_e.get()
+        # 复制进来的路径通常带引号
+        id_path = id_path[1:]
+        id_path = id_path[:-1]
+        
+    if len(id_list) == 1:
+        id0 = -1
+    else:
+        for i in range(-1, -len(id_list), -1):  # 步长-1意为倒数
+            if id_list[i] == "":
+                continue
+            else:
+                id0 = i+1  # 若id_list: list = [1, 2, 3, '', 5, 6, '', '', ''], id0 = -3
+                break
+            
+    ID0 = id0  # id0的拷贝
+    id_new = 0
+                
+    try:
+        with open(id_path, "r") as f:
+            import_id_list = f.readlines()
+            
+        for import_id in import_id_list:
+            import_id = import_id.split(":")[0]
+            if ID0 < 0:
+                # 顺次填充新导入的id
+                id_list[ID0] = import_id
+                ID0 += 1
+            else:
+                id_list.append(import_id)
+                id_new += 1  # 记录下新增的id数量
+        ID_NEW = id_new  # 拷贝一份新增id数量
+        
+        Y = 1
+        for s, y in es_dict.values():
+            Y = y if y > Y else Y  # 若 y > Y, 把 Y 变为 y , 以获得最大的 y 值
+        
+        while ID_NEW:  # 新增id数不为0
+        
+            y_btn.destroy()
+            finish_btn.destroy()
+            try:
+                f_l.grid_forget()
+            except:
+                pass
+            
+            Y += 1
+            entry_entry(x=0, y=Y)
+            
+            ID_NEW -= 1
+        
+        added_id = -id0 + id_new  # 添加进的id数为-id0 + id_new, 一定不为0
+        e_list = []
+        for e in es_dict.keys():
+            e_list.append(e)
+            
+        for i in range(-1, -added_id-1, -1):  # 运用了倒叙的编程手法
+            # print("i = {}".format((i)))
+            e = e_list[i]
+            e.insert(0, id_list[i])  # 把id填入框中
+            y = es_dict[e][1]
+            save(e, y)  # 保存
+            
+    except:
+        Label(main_entry_frame, text="无可导入id！！").grid(column=0, row=0)
+            
 
 def make_main_entry():
     global es_dict, id_list  # 全局化
@@ -166,7 +243,14 @@ def make_main_entry():
     （路径同图片存储路径）""").grid(column=3, row=0)
     export_id_btn = Button(main_entry_frame, text="点此导出id", command=lambda: export_id(id_name_e))
     export_id_btn.grid(column=3, row=2)
-
+    
+    id_path_e = Entry(main_entry_frame)
+    id_path_e.grid(column=3, row=4)
+    Label(main_entry_frame, text="""在下方输入导入id的绝对地址
+    （带引号）""").grid(column=3, row=3)
+    import_id_btn = Button(main_entry_frame, text="点此导入id", command=lambda: import_id(id_path_e, id_name_e))
+    import_id_btn.grid(column=3, row=5)
+    
     main_entry_frame.grid()
 
 
