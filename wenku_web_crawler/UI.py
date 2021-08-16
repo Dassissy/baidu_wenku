@@ -1,7 +1,7 @@
 from tkinter import Tk, Label, Entry, Button, Frame, Toplevel
-from web_crawler import main as web_crawler, make_path
-from web_crawler import get_info
-import time
+from web_crawler_2 import Crawler, make_path
+from web_crawler_2 import get_info
+import time, os
 
 
 def ety(x, y):  # 创建新的输入框
@@ -16,10 +16,11 @@ def save(e, y):  # 保存程序
     id_list[y - 1] = txt  # 可修改
     try:
         title, num_of_pages = get_info(txt)  # 若id出错，这一步会报错
+        
         l = Label(main_entry_frame, text="已保存:" + title + " : " + num_of_pages + "页")
         l.grid(column=2, row=y)
 
-        if len(es_dict[e]) == 2:
+        if len(es_dict[e]) == 2:  # es_dict: dict = {e: [y, title, num_of_pages]}
             es_dict[e].append(title)
             es_dict[e].append(num_of_pages)
         else:
@@ -72,18 +73,35 @@ def begin(x, y):  # 开始爬取
             save(e, y)  # 那就启动
 
     ID_list = []  # ID_list是准备传输给爬虫程序的，删除了出错id的列表
-    for ID in id_list:
-        if not ID == '':
-            ID_list.append(ID)
+    Es = list(es_dict.keys())
+    for i in range(len(id_list)):
+        if not id_list[i] == '':
+            b, y, title, num_of_pages = es_dict[Es[i]]
+            ID_list.append([id_list[i], title, num_of_pages])  # ID_list: list= [[ID, title, num_of_pages]]
     if ID_list:
         try:
             time_label.grid_forget()
         except:
             pass
+        
+        # ID_list中，还要去掉重复的标题（包括在储存路径中存在的标题）
+        scr_path_ = scr_path + scr_name + r"//"
+        have_had_id_list = os.listdir(scr_path+scr_name)
+        title_list: list = []
+        for i in range(len(ID_list)):
+            title_list.append(ID_list[i][1]+".png")
+        for i in range(len(title_list)):
+            title = title_list[i]
+            if title in have_had_id_list or title_list.count(title) > 1:  # 如果已存在
+                time_now = str(time.time()).split(".")
+                time_now = time_now[0] + time_now[1]
+                title = ID_list[i][1] + "_" + time_now  # 修改title（加上时间后缀）（此时不加.png）
+                ID_list[i][1] = title
+                time.sleep(0.1)  # 如果此时不暂停，那么可能在添加后缀之后文件名仍然相同
 
         time_start = time.time()  # 记录耗时
-        scr_path_ = scr_path + scr_name + r"//"
-        web_crawler(ID_list, scr_path_, cookie_path)  # 启动爬虫
+        crawler = Crawler(ID_list, scr_path_, cookie_path)  # 创建爬虫
+        crawler.begin()  # 启动爬虫
         time_end = time.time()
         TIME = time_end - time_start
 
@@ -96,7 +114,7 @@ def begin(x, y):  # 开始爬取
         error_l.grid(column=x, row=y + 3)
 
 
-def yes_btn(x, y):
+def yes_btn(x, y):  # 开始爬取和继续输入按钮
     global f_l, y_btn, finish_btn
     f_l = Label(main_entry_frame, text="""爬虫已启动过，若不需要导出id，请关闭这个窗体
                 还需要爬取的话，请再次点击“合成爬取方案”""")
@@ -220,7 +238,7 @@ def import_id(id_path_e, id_name_e):
             
 
 def make_main_entry():
-    global es_dict, id_list  # 全局化
+    global es_dict, id_list
     global main_entry_frame
     es_dict = {}  # 输入框和输入信息的字典
     id_list = ['']  # 第一个空的初始化
