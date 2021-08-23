@@ -1,5 +1,5 @@
 from tkinter import Tk, Label, Entry, Button, Frame, Toplevel
-from web_crawler_2 import Crawler, make_path
+from web_crawler_headless import Crawler, make_path
 from web_crawler_2 import get_info
 import time, os
 
