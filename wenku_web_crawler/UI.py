@@ -1,6 +1,6 @@
 from tkinter import Tk, Label, Entry, Button, Frame, Toplevel
 from web_crawler_headless import Crawler, make_path
-from web_crawler_2 import get_info
+from web_crawler_headless import get_info
 import time, os
 
 
@@ -78,11 +78,6 @@ def begin(x, y):  # 开始爬取
         if not id_list[i] == '':
             b, y, title, num_of_pages = es_dict[Es[i]]
             ID_list.append([id_list[i], title, num_of_pages])  # ID_list: list= [[ID, title, num_of_pages]]
-    if ID_list:
-        try:
-            time_label.grid_forget()
-        except:
-            pass
         
         # ID_list中，还要去掉重复的标题（包括在储存路径中存在的标题）
         scr_path_ = scr_path + scr_name + r"//"
@@ -173,11 +168,11 @@ def import_id(id_path_e, id_name_e):
         id_path = id_path[1:]
         id_path = id_path[:-1]
         
-    if len(id_list) == 1:
+    if len(id_list) == 1 and id_list[0] == "":
         id0 = -1
     else:
         for i in range(-1, -len(id_list)-1, -1):  # 步长-1意为倒数
-            if i == -len(id_list):  # 若列表全空如: ['', '', '', '']
+            if i == -len(id_list) and id_list[i] == "":  # 若列表全空如: ['', '', '', '']
                 id0 = i
             elif id_list[i] == "":
                 continue
@@ -204,7 +199,8 @@ def import_id(id_path_e, id_name_e):
         ID_NEW = id_new  # 拷贝一份新增id数量
         
         Y = 1
-        for s, y in es_dict.values():
+        for value in list(es_dict.values()):
+            y = value[1]
             Y = y if y > Y else Y  # 若 y > Y, 把 Y 变为 y , 以获得最大的 y 值
         
         while ID_NEW:  # 新增id数不为0
@@ -234,7 +230,7 @@ def import_id(id_path_e, id_name_e):
             save(e, y)  # 保存
             
     except:
-        Label(main_entry_frame, text="无可导入id！！").grid(column=0, row=0)
+        Label(main_entry_frame, text="导入id时出现了错误！！").grid(column=0, row=0)
             
 
 def make_main_entry():
@@ -250,7 +246,9 @@ def make_main_entry():
     scr_path = config_dict["scr_path"]
     scr_name = config_dict["scr_name"]
 
-    main_entry_frame = Frame(Toplevel())
+    tp = Toplevel()
+    tp.title("合成爬取方案")
+    main_entry_frame = Frame(tp)
     Label(main_entry_frame, text="在下方的框内输入id").grid(column=0, row=0)
     get_id_help_btn = Button(main_entry_frame, text="从链接中截取id的方法看这里！", command=get_id_help_labels)
     get_id_help_btn.grid(column=1, row=0)
@@ -273,7 +271,6 @@ def make_main_entry():
     import_id_btn.grid(column=3, row=5)
     
     main_entry_frame.grid()
-
 
 
 def config_setting():
@@ -333,7 +330,9 @@ def c_ety(x, y):  # 创建新的输入框
 
 def make_config_frame():
     global config_frame
-    config_frame = Frame(Toplevel())
+    tp = Toplevel()
+    tp.title("配置设置")
+    config_frame = Frame(tp)
     config_setting()
     config_frame.grid()
     
@@ -357,7 +356,9 @@ def config_help_labels():  # 配置页上的说明文字
     
     
 def get_id_help_labels():  # 《如何截取id》
-    get_id_frame = Frame(Toplevel())
+    tp = Toplevel()
+    tp.title("如何截取id")
+    get_id_frame = Frame(tp)
     Label(get_id_frame, text="文库id的截取方式如下：").grid(column=0, row=0)
     Label(get_id_frame, text="这是一个文库链接 https://wenku.baidu.com/view/abc123def456ghi789.html").grid(column=0, row=1)
     Label(get_id_frame, text="而所谓“id”，就是中间“abc123def456ghi789”这一段").grid(column=0, row=2)
@@ -368,7 +369,7 @@ def get_id_help_labels():  # 《如何截取id》
 
 def main():
     window = Tk()
-    window.title("爬虫图形界面")
+    window.title("百度文库爬虫程序")
     tk_help_labels(window)
     main_entry_btn = Button(window, text="合成爬取方案", command=make_main_entry)
     main_entry_btn.grid(column=0, row=4)

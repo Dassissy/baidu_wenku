@@ -2,13 +2,30 @@ import time
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from functools import wraps
 
-op = Options()
-op.add_argument('--headless')
-op.add_argument('--disable-gpu')
-d = webdriver.Chrome(options=op)
 
-d.get('https://www.baidu.com')
-time.sleep(1)
-d.save_screenshot("D://baidu_scrshot.png")
-d.quit()
+def logit(func):
+    @wraps(func)
+    def with_logging(*args, **kwargs):
+        ti2 = time.asctime(time.localtime(time.time()))
+        log_string_0 = ti2 + " : " + func.__name__ + "  began"
+        func(*args, **kwargs)
+        ti2 = time.asctime(time.localtime(time.time()))
+        log_string_1 = ti2 + " : " + func.__name__ + "  finished"
+        with open("D://wenku_pics//logfile.log", "w") as f:
+            f.write(log_string_0 + "\n")
+            f.write(log_string_1 + "\n")
+
+    return with_logging
+
+
+@logit
+def add(x):
+    print(5*x)
+    time.sleep(1)
+    return 5 * x
+
+
+if __name__ == "__main__":
+    add(5)

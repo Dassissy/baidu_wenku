@@ -11,6 +11,7 @@ from PIL import Image  # 图片操作
 import threading  # 多线程优化
 from selenium.webdriver.chrome.options import Options
 import queue
+from functools import wraps
 
 
 def get_info(wenku_id):  # 拿到一些信息
@@ -86,7 +87,8 @@ def get_clean_window(wenku_id, cookie_path, driver, work_queue, title):
                    "//div[@class='try-end-fold-page fold-static']",
                    "//div[@class='left-wrapper zoom-scale']/div[@class='no-full-screen']",
                    "//div[@class='lazy-load']",
-                   "//div[@class='try-end-fold-page']"]  # 除广告及水印外所有需删除的元素
+                   "//div[@class='try-end-fold-page']",
+                   "//div[@class='lazy-load']"]  # 除广告及水印外所有需删除的元素
     for ele_path in remove_list:
         try:
             ele = driver.find_element(By.XPATH, ele_path)
@@ -126,6 +128,9 @@ def get_screenshot(num_of_pages, title, scr_path_, driver, work_queue):
     for i in range(times + 1):  # 加载图片
         js = "var q=document.documentElement.scrollTop=" + str(i * screen_height)
         driver.execute_script(js)
+
+        work_queue[title] = "遍历文档：{} / {}".format(i, times)
+
         time.sleep(0.2)
         if i == times - 1:
             h1 = driver.find_element(By.TAG_NAME, "body").size["height"]
@@ -136,6 +141,9 @@ def get_screenshot(num_of_pages, title, scr_path_, driver, work_queue):
                     i += 1
                     js = "var q=document.documentElement.scrollTop=" + str(i * screen_height)
                     driver.execute_script(js)
+
+                    work_queue[title] = "遍历文档：{} / {}".format(i, times)
+
                     time.sleep(0.2)
                     h3 = driver.find_element(By.TAG_NAME, "body").size["height"]
                     h1, h2 = h2, h3
@@ -305,6 +313,21 @@ def web_crawler(wenku_id, title, num_of_pages, scr_path_, cookie_path, work_queu
     get_screenshot(num_of_pages, title, scr_path_, driver, work_queue)  # 屏幕截图并保存（长图）
 
 
+def logit(func):  # 打日志，还没想好怎么用
+    @wraps(func)
+    def with_logging(*args, **kwargs):
+        ti2 = time.asctime(time.localtime(time.time()))
+        log_string_0 = ti2 + " : " + func.__name__ + "  began"
+        func(*args, **kwargs)
+        ti2 = time.asctime(time.localtime(time.time()))
+        log_string_1 = ti2 + " : " + func.__name__ + "  finished"
+        with open("D://wenku_pics//logfile.log", "a") as f:
+            f.write(log_string_0 + "\n")
+            f.write(log_string_1 + "\n")
+
+    return with_logging
+
+
 class Crawler:
     def __init__(self, id_list, scr_path_, cookie_path):
         self.id_list = id_list
@@ -312,6 +335,7 @@ class Crawler:
         self.cookie_path = cookie_path
         self.work_queue: dict = {}  # FIXME 打日志
 
+    @logit
     def begin(self):
         id_list = self.id_list
         scr_path_ = self.scr_path_
