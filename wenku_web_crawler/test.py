@@ -1,4 +1,5 @@
 import time
+from tkinter import *
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -28,4 +29,6 @@ def add(x):
 
 
 if __name__ == "__main__":
-    add(5)
+    window = Tk()
+    window.title("123")
+    window.mainloop()

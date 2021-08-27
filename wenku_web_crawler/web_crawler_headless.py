@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from tkinter import *
 import requests
 from bs4 import BeautifulSoup  # 提取网页中需要的内容
 import re
@@ -11,7 +12,7 @@ from PIL import Image  # 图片操作
 import threading  # 多线程优化
 from selenium.webdriver.chrome.options import Options
 import queue
-from functools import wraps
+from functools import update_wrapper, wraps
 
 
 def get_info(wenku_id):  # 拿到一些信息
@@ -286,31 +287,39 @@ def just_body(scr_name, work_queue, title):
 def title_list_duplicate_removal(ID_list, scr_path):
     # 针对标题的去重
     have_had_id_list = os.listdir(scr_path)
+    have_had_id_list = [have_had_id_list[i].lower() for i in range(len(have_had_id_list))]  # 小写化
     title_list: list = []
     for i in range(len(ID_list)):
-        title_list.append(ID_list[i][1] + ".png")
+        title_list.append(ID_list[i][1].lower() + ".png")  # 小写化
     for i in range(len(title_list)):
         title = title_list[i]
         if title in have_had_id_list or title_list.count(title) > 1:  # 如果已存在
             time_now = str(time.time()).split(".")
             time_now = time_now[0] + time_now[1]
-            title = ID_list[i][1] + "_" + time_now  # 修改title（加上时间后缀）（此时不加.png）
+            title = ID_list[i][1] + "_" + time_now  # 修改title（加上时间后缀）（此时不加.png，也无需小写）
             ID_list[i][1] = title
             time.sleep(0.1)  # 如果此时不暂停，那么可能在添加后缀之后文件名仍然相同（未判明）
 
 
 def web_crawler(wenku_id, title, num_of_pages, scr_path_, cookie_path, work_queue):
 
-    work_queue[title] = "开始"
+    try:
 
-    op = Options()
-    op.add_argument('--headless')
-    op.add_argument('--disable-gpu')
-    driver = webdriver.Chrome(options=op)  # 用谷歌的无头浏览器
-    get_clean_window(wenku_id=wenku_id, cookie_path=cookie_path,
-                     driver=driver, work_queue=work_queue, title=title)  # 把窗口的各种影响阅读的弹窗清一遍
-    time.sleep(1)
-    get_screenshot(num_of_pages, title, scr_path_, driver, work_queue)  # 屏幕截图并保存（长图）
+        work_queue[title] = "开始"
+
+        op = Options()
+        op.add_argument('--headless')
+        op.add_argument('--disable-gpu')
+        op.add_argument('--log-level=4')
+        driver = webdriver.Chrome(options=op)  # 用谷歌的无头浏览器
+        get_clean_window(wenku_id=wenku_id, cookie_path=cookie_path,
+                        driver=driver, work_queue=work_queue, title=title)  # 把窗口的各种影响阅读的弹窗清一遍
+        time.sleep(1)
+        get_screenshot(num_of_pages, title, scr_path_, driver, work_queue)  # 屏幕截图并保存（长图）
+
+    except:  # 捕捉错误
+
+        work_queue[title] = "在{}时出错了！".format(work_queue[title])
 
 
 def logit(func):  # 打日志，还没想好怎么用
@@ -328,41 +337,63 @@ def logit(func):  # 打日志，还没想好怎么用
     return with_logging
 
 
+
 class Crawler:
     def __init__(self, id_list, scr_path_, cookie_path):
         self.id_list = id_list
         self.scr_path_ = scr_path_
         self.cookie_path = cookie_path
         self.work_queue: dict = {}  # FIXME 打日志
+        self.lock = threading.Lock()
 
-    @logit
-    def begin(self):
+
+    def update_varstring(self):
+        global progress_bar_txt, tl
+        self.work_queue[self.id_list[0][1]] = "初始化中..."  # 征用一下work_queue的第一个位置
+        while True:
+            # 获取进度文本
+            progress_bar_list = eval(str([str(key) + ":" + str(self.work_queue[key]) + "\n" for key in self.work_queue]))
+            var_txt = ''
+            for txt in progress_bar_list:
+                var_txt += txt
+            progress_bar_txt.set(var_txt)
+            if var_txt == '':
+                break
+            # 隔一段时间打一次进度
+            time.sleep(0.5)
+            tl.update()
+        tl.destroy()
+
+
+    def crawler_begin(self):
         id_list = self.id_list
         scr_path_ = self.scr_path_
         cookie_path = self.cookie_path
 
-        for i in range(len(id_list)):
-            while len(self.work_queue) >= 5:  # 最多允许5个线程同时运行
-                print(self.work_queue)
-                time.sleep(0.5)
-            try:
+        i = 0
+        while i < len(id_list):
+            if len(self.work_queue) <= 10:  # 最大并发数为10
                 crawler_thread = threading.Thread(target=web_crawler,
-                                                  args=(id_list[i][0], id_list[i][1], id_list[i][2],
+                                                    args=(id_list[i][0], id_list[i][1], id_list[i][2],
                                                         scr_path_, cookie_path, self.work_queue))
-                self.work_queue[id_list[i][1]] = "创建线程"
-                print(self.work_queue)
+                self.work_queue[id_list[i][1]] = "线程已创建"
                 crawler_thread.start()
-            except:
-                title, num_of_pages = get_info(id_list[i])
-                print("id为“{}”的文档出错，其标题为：“{}”".format(id_list[i], title))
+                i += 1
+            else:
+                time.sleep(0.5)
 
-            if i == len(id_list) - 1:  # 如果已经运行到了结尾
-                print(self.work_queue)
-                print("已全部加入队列")
-                time.sleep(1)
 
-                while self.work_queue:  # 所有文档的爬取都已开始进行，只需等待队列清空
-                    print(self.work_queue)
-                    time.sleep(0.5)
-
-                print("结束")
+    @logit
+    def begin(self):
+        global progress_bar_txt, tl
+        tl = Toplevel()
+        tl.title("进度条")
+        # 通过进度条显示内容
+        progress_bar_txt = StringVar()
+        progress_bar_txt.set("稍等片刻...")
+        progress_bar_label = Label(tl, textvariable=progress_bar_txt)
+        progress_bar_label.grid()
+        tl.update()
+        threading.Thread(target=self.update_varstring).start()
+        self.crawler_begin() # 启动爬虫
+            

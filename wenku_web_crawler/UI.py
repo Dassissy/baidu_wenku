@@ -1,7 +1,7 @@
-from tkinter import Tk, Label, Entry, Button, Frame, Toplevel
+from tkinter import *
 from web_crawler_headless import Crawler, make_path
 from web_crawler_headless import get_info
-import time, os
+import time, os, threading
 
 
 def ety(x, y):  # 创建新的输入框
@@ -62,7 +62,7 @@ def continue_this_part(x, y):  # 继续输入按钮
 
 
 def begin(x, y):  # 开始爬取
-    global error_l, time_label  # 出错信息全局共享，时间信息方便删
+    global error_l, time_label, crawler  # 出错信息全局共享，时间信息方便删
     f_l.grid_forget()
     # print("id_list is:{}".format(id_list))
     
@@ -79,6 +79,7 @@ def begin(x, y):  # 开始爬取
             b, y, title, num_of_pages = es_dict[Es[i]]
             ID_list.append([id_list[i], title, num_of_pages])  # ID_list: list= [[ID, title, num_of_pages]]
         
+    if ID_list:
         # ID_list中，还要去掉重复的标题（包括在储存路径中存在的标题）
         scr_path_ = scr_path + scr_name + r"//"
         have_had_id_list = os.listdir(scr_path+scr_name)
@@ -164,7 +165,7 @@ def import_id(id_path_e, id_name_e):
         id_path = scr_path + scr_name + "//" + id_name + ".txt"
     else:
         id_path = id_path_e.get()
-        # 复制进来的路径通常带引号
+        # 复制进来的路径带引号
         id_path = id_path[1:]
         id_path = id_path[:-1]
         
@@ -263,12 +264,12 @@ def make_main_entry():
     export_id_btn.grid(column=3, row=2)
     
     id_path_e = Entry(main_entry_frame)
-    id_path_e.grid(column=3, row=4)
+    id_path_e.grid(column=3, row=6)
     Label(main_entry_frame, text="""在下方输入导入id的绝对地址
     （带引号）
-    也可留空，此时会检测id_list的导出位置""").grid(column=3, row=3)
+    也可留空，此时会检测id_list的导出位置""").grid(column=3, row=3, rowspan=3)
     import_id_btn = Button(main_entry_frame, text="点此导入id", command=lambda: import_id(id_path_e, id_name_e))
-    import_id_btn.grid(column=3, row=5)
+    import_id_btn.grid(column=3, row=7)
     
     main_entry_frame.grid()
 
@@ -365,6 +366,7 @@ def get_id_help_labels():  # 《如何截取id》
     Label(get_id_frame, text="在浏览器中截取id，只需要在这段字符中的任意位置双击鼠标即可").grid(column=0, row=3)
     Label(get_id_frame, text="截取后即可粘贴进id输入框中").grid(column=0, row=4)
     get_id_frame.grid()
+
 
 
 def main():
