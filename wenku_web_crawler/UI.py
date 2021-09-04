@@ -95,15 +95,10 @@ def begin(x, y):  # 开始爬取
                 ID_list[i][1] = title
                 time.sleep(0.1)  # 如果此时不暂停，那么可能在添加后缀之后文件名仍然相同
 
-        time_start = time.time()  # 记录耗时
         crawler = Crawler(ID_list, scr_path_, cookie_path)  # 创建爬虫
         crawler.begin()  # 启动爬虫
-        time_end = time.time()
-        TIME = time_end - time_start
 
         f_l.grid(column=x, row=y + 3)
-        time_label = Label(main_entry_frame, text="耗时： " + str(TIME) + " 秒")
-        time_label.grid(column=x + 1, row=y + 3)
 
     else:  # 如果此列表全空，那么就是所有的id都出错了
         error_l = Label(main_entry_frame, text="所有的id都出错了，请在更改后重试！！")
@@ -113,7 +108,7 @@ def begin(x, y):  # 开始爬取
 def yes_btn(x, y):  # 开始爬取和继续输入按钮
     global f_l, y_btn, finish_btn
     f_l = Label(main_entry_frame, text="""爬虫已启动过，若不需要导出id，请关闭这个窗体
-                还需要爬取的话，请再次点击“合成爬取方案”""")
+    还需要爬取的话，请再次点击“合成爬取方案”""")
     finish_btn = Button(main_entry_frame, text="开始爬取，记得要保存哦！", command=lambda: begin(x, y))
     finish_btn.grid(column=x, row=y)
     y_btn = Button(main_entry_frame, text="继续输入id点这里！", command=lambda: continue_this_part(x, y))
@@ -359,7 +354,7 @@ def config_help_labels():  # 配置页上的说明文字
 def get_id_help_labels():  # 《如何截取id》
     tp = Toplevel()
     tp.title("如何截取id")
-    get_id_frame = Frame(tp)
+    get_id_frame = Frame(tp) 
     Label(get_id_frame, text="文库id的截取方式如下：").grid(column=0, row=0)
     Label(get_id_frame, text="这是一个文库链接 https://wenku.baidu.com/view/abc123def456ghi789.html").grid(column=0, row=1)
     Label(get_id_frame, text="而所谓“id”，就是中间“abc123def456ghi789”这一段").grid(column=0, row=2)

@@ -79,17 +79,9 @@ def get_clean_window(wenku_id, cookie_path, driver, work_queue, title):
 
     work_queue[title] = "删除广告"
 
-    remove_list = ["//div[@class='header-wrapper no-full-screen new-header']",
-                   "//div[@class='left-wrapper zoom-scale']/div[@class='no-full-screen']",
-                   "//div[@class='reader-wrap']/div/div[@class='reader-topbar']",
-                   "//div[@class='right-wrapper no-full-screen']",
-                   "//div[@class='theme-enter-wrap']",
-                   "//div[@class='lazy-load']/div[@class='sidebar-wrapper']",
-                   "//div[@class='try-end-fold-page fold-static']",
-                   "//div[@class='left-wrapper zoom-scale']/div[@class='no-full-screen']",
-                   "//div[@class='lazy-load']",
-                   "//div[@class='try-end-fold-page']",
-                   "//div[@class='lazy-load']"]  # 除广告及水印外所有需删除的元素
+    with open("remove_list.txt") as f:
+        remove_list = eval(f.read())  # 除广告及水印外所有需删除的元素
+
     for ele_path in remove_list:
         try:
             ele = driver.find_element(By.XPATH, ele_path)
@@ -149,22 +141,50 @@ def get_screenshot(num_of_pages, title, scr_path_, driver, work_queue):
                     h3 = driver.find_element(By.TAG_NAME, "body").size["height"]
                     h1, h2 = h2, h3
 
-    work_queue[title] = "设置窗体大小"
+    time.sleep(3)  # 此时页面中可能出现一些会自动消失的小贴士
 
-    driver.set_window_size(width=1500, height=(i+1+1)*screen_height)  # 比body元素大一圈，这样没有下拉条
+    if (i+2) * screen_height > 45000:  # 如果页面非常非常大
+        # 那就不可以直接截图，要分成好几块
+        page_num = (i+2) * screen_height // 25000 + 1  # 不知为何，总是会少掉2页
+        page_h = round((i+2) * screen_height / page_num, 2)
 
-    work_queue[title] = "截图"
+        work_queue[title] = "设置窗体大小"
 
-    make_path(scr_path_)
-    scr_name = scr_path_ + title + ".png"
-    driver.get_screenshot_as_file(scr_name)  # 保存
+        driver.set_window_size(width=1500, height=page_h)
+        for num in range(page_num):
+            
+            work_queue[title] = "截图中：{} / {}".format(num+1, page_num)
 
-    work_queue[title] = "去边框"
+            js = "var q=document.documentElement.scrollTop=" + str(num * page_h)
+            driver.execute_script(js)
+            make_path(scr_path_ + title + "//")
+            scr_name = scr_path_ + title + "//" + str(num+1) + ".png"
+            driver.get_screenshot_as_file(scr_name)  # 保存
+            process_thread = threading.Thread(target=just_body, args=(scr_name, {}, title))  # 另起一个线程进行图片处理
+            process_thread.start()
+            # process_thread.join()
+        
+        work_queue[title] = "结束"
+        del work_queue[title]
+    
+    else:
 
-    just_body(scr_name, work_queue, title)  # 去边框
+        work_queue[title] = "设置窗体大小"
 
-    work_queue[title] = "结束"
-    del work_queue[title]
+        driver.set_window_size(width=1500, height=(i+1+1)*screen_height)  # 比body元素大一圈，这样没有下拉条
+
+        work_queue[title] = "截图"
+
+        make_path(scr_path_)
+        scr_name = scr_path_ + title + ".png"
+        driver.get_screenshot_as_file(scr_name)  # 保存
+
+        work_queue[title] = "去边框"
+
+        just_body(scr_name, work_queue, title)  # 去边框
+
+        work_queue[title] = "结束"
+        del work_queue[title]
 
 
 def just_body(scr_name, work_queue, title):
@@ -172,6 +192,7 @@ def just_body(scr_name, work_queue, title):
     只需要图片的内容部分，所以要对边框进行处理
     百度文库的正文内容背景色是纯白，边框一般是灰色(244,244,244)，但有时会换成其它图案
     因此，这里是通过把不是纯白的部分看成是边框并删除，以此达到去边框的效果
+    同时必须先进行横向的去边框，因为横向的边框可能会对纵向的有较大影响
     """
 
     scrshot = Image.open(scr_name)  # 打开图片
@@ -185,7 +206,7 @@ def just_body(scr_name, work_queue, title):
         im = scrshot.crop(box)
         pl0 = im.load()  # 获取像素点
         point_list: list = [pl0[i, 0] for i in range(l)]
-        # 如果像素点列表中的白色数量大于列表长度的一半，则认为它是”正文“
+        # 横向时，如果像素点列表中的白色数量大于列表长度的 1/2 ，则认为它是“正文 ”
         if point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:
             while True:  # 这时再向前寻找”边界“
                 i -= 1
@@ -199,35 +220,9 @@ def just_body(scr_name, work_queue, title):
             box = (0, i, l, w)
             scrshot = scrshot.crop(box)
             break
-    # 接着是 纵向 左侧
-    work_queue[title] = "去边框 纵向 左侧"
-
-    l, w = scrshot.size
-    l_list = [i for i in range(l)][::4]
-    for i in l_list:
-        box = (i, 0, i+1, w)
-        im = scrshot.crop(box)
-        pl0 = im.load()  # 获取像素点
-        point_list: list = [pl0[0, i] for i in range(w)]
-        # 如果像素点列表中的白色数量大于列表长度的一半，则认为它是”正文“
-        if point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:
-            while True:  # 这时再向前寻找”边界“
-                i -= 1
-                box = (i, 0, i+1, w)
-                im = scrshot.crop(box)
-                pl0 = im.load()  # 获取像素点
-                point_list: list = [pl0[0, i] for i in range(w)]
-                if not point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:  # 找到边界处的i值
-                    i += 1  # 这样截出来才是正文
-                    break  # 结束循环
-            box = (i, 0, l, w)
-            scrshot = scrshot.crop(box)
-            break
 
     #  翻转图片
     scrshot = scrshot.rotate(180)
-
-    # 重复一遍
     # 横向 下方
     work_queue[title] = "去边框 横向 下方"
 
@@ -238,7 +233,6 @@ def just_body(scr_name, work_queue, title):
         im = scrshot.crop(box)
         pl0 = im.load()  # 获取像素点
         point_list: list = [pl0[i, 0] for i in range(l)]
-        # 如果像素点列表中的白色数量大于列表长度的一半，则认为它是”正文“
         if point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:
             while True:  # 这时再向前寻找”边界“
                 i -= 1
@@ -252,7 +246,8 @@ def just_body(scr_name, work_queue, title):
             box = (0, i, l, w)
             scrshot = scrshot.crop(box)
             break
-    # 纵向 右侧
+
+    # 纵向 右侧，此时超过 2/3 才算判定成功
     work_queue[title] = "去边框 纵向 右侧"
 
     l, w = scrshot.size
@@ -262,22 +257,44 @@ def just_body(scr_name, work_queue, title):
         im = scrshot.crop(box)
         pl0 = im.load()  # 获取像素点
         point_list: list = [pl0[0, i] for i in range(w)]
-        # 如果像素点列表中的白色数量大于列表长度的一半，则认为它是”正文“
-        if point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:
+        if point_list.count((255, 255, 255, 255)) >= len(point_list) * 2 / 3:
             while True:  # 这时再向前寻找”边界“
                 i -= 1
                 box = (i, 0, i + 1, w)
                 im = scrshot.crop(box)
                 pl0 = im.load()  # 获取像素点
                 point_list: list = [pl0[0, i] for i in range(w)]
-                if not point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:  # 找到边界处的i值
+                if not point_list.count((255, 255, 255, 255)) >= len(point_list) * 2 / 3:  # 找到边界处的i值
                     i += 1  # 这样截出来才是正文
                     break  # 结束循环
             box = (i, 0, l, w)
             scrshot = scrshot.crop(box)
             break
-    #  翻转图片
+
     scrshot = scrshot.rotate(180)
+    # 接着是 纵向 左侧，此时超过 2/3 才算判定成功
+    work_queue[title] = "去边框 纵向 左侧"
+
+    l, w = scrshot.size
+    l_list = [i for i in range(l)][::4]
+    for i in l_list:
+        box = (i, 0, i+1, w)
+        im = scrshot.crop(box)
+        pl0 = im.load()  # 获取像素点
+        point_list: list = [pl0[0, i] for i in range(w)]
+        if point_list.count((255, 255, 255, 255)) >= len(point_list) * 2 / 3:
+            while True:  # 这时再向前寻找”边界“
+                i -= 1
+                box = (i, 0, i+1, w)
+                im = scrshot.crop(box)
+                pl0 = im.load()  # 获取像素点
+                point_list: list = [pl0[0, i] for i in range(w)]
+                if not point_list.count((255, 255, 255, 255)) >= len(point_list) * 2 / 3:  # 找到边界处的i值
+                    i += 1  # 这样截出来才是正文
+                    break  # 结束循环
+            box = (i, 0, l, w)
+            scrshot = scrshot.crop(box)
+            break
 
     work_queue[title] = "保存"
 
@@ -344,25 +361,43 @@ class Crawler:
         self.scr_path_ = scr_path_
         self.cookie_path = cookie_path
         self.work_queue: dict = {}  # FIXME 打日志
+        self.progress_bar_thread = threading.Thread(target=self.update_varstring)
+        self.progress_bar_thread.setName("progress_bar_thread")
         self.lock = threading.Lock()
+
+
+    @property
+    def finished(self):
+        if self.progress_bar_thread.is_alive():
+            return False
+        else:
+            return True
 
 
     def update_varstring(self):
         global progress_bar_txt, tl
         self.work_queue[self.id_list[0][1]] = "初始化中..."  # 征用一下work_queue的第一个位置
+        ERROR = False
+        time0 = time.time()
         while True:
             # 获取进度文本
             progress_bar_list = eval(str([str(key) + ":" + str(self.work_queue[key]) + "\n" for key in self.work_queue]))
             var_txt = ''
             for txt in progress_bar_list:
                 var_txt += txt
-            progress_bar_txt.set(var_txt)
+            time1 = time.time()
+            time_txt = "计时：" + str(round(time1-time0, 2))
+            progress_bar_txt.set(var_txt + "\n "+ time_txt)
             if var_txt == '':
                 break
+            elif len(self.work_queue.values()) == len(re.findall(r"在.*?时出错了！", str(self.work_queue.values()))):  # 如果所有内容都是出错信息的话
+                ERROR = True
+                break
             # 隔一段时间打一次进度
-            time.sleep(0.5)
+            time.sleep(0.1)
             tl.update()
-        tl.destroy()
+        if not ERROR:  # 如果没有发生错误
+            tl.destroy()  # 删除窗体
 
 
     def crawler_begin(self):
@@ -372,7 +407,7 @@ class Crawler:
 
         i = 0
         while i < len(id_list):
-            if len(self.work_queue) <= 10:  # 最大并发数为10
+            if len(self.work_queue) < 10:  # 最大并发数为10
                 crawler_thread = threading.Thread(target=web_crawler,
                                                     args=(id_list[i][0], id_list[i][1], id_list[i][2],
                                                         scr_path_, cookie_path, self.work_queue))
@@ -385,15 +420,14 @@ class Crawler:
 
     @logit
     def begin(self):
-        global progress_bar_txt, tl
+        global progress_bar_txt, tl, progress_bar_thread
         tl = Toplevel()
-        tl.title("进度条")
-        # 通过进度条显示内容
+        tl.title("进度框")
+        # 通过进度框显示内容
         progress_bar_txt = StringVar()
-        progress_bar_txt.set("稍等片刻...")
-        progress_bar_label = Label(tl, textvariable=progress_bar_txt)
+        progress_bar_txt.set("稍等片刻，爬虫已经启动，所有预设线程都在忙碌...")
+        progress_bar_label = Label(tl, textvariable=progress_bar_txt, anchor="w", justify="left")
         progress_bar_label.grid()
         tl.update()
-        threading.Thread(target=self.update_varstring).start()
+        self.progress_bar_thread.start()
         self.crawler_begin() # 启动爬虫
-            

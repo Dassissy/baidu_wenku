@@ -1,0 +1,13 @@
+[
+    "//div[@class='header-wrapper no-full-screen new-header']",
+    "//div[@class='left-wrapper zoom-scale']/div[@class='no-full-screen']",
+    "//div[@class='reader-wrap']/div/div[@class='reader-topbar']",
+    "//div[@class='right-wrapper no-full-screen']",
+    "//div[@class='theme-enter-wrap']",
+    "//div[@class='lazy-load']/div[@class='sidebar-wrapper']",
+    "//div[@class='try-end-fold-page fold-static']",
+    "//div[@class='left-wrapper zoom-scale']/div[@class='no-full-screen']",
+    "//div[@class='lazy-load']",
+    "//div[@class='try-end-fold-page']",
+    "//div[@class='lazy-load']"
+]

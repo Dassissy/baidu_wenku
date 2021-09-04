@@ -1,4 +1,4 @@
-import time
+import time, re
 from tkinter import *
 
 from selenium import webdriver
@@ -29,6 +29,7 @@ def add(x):
 
 
 if __name__ == "__main__":
-    window = Tk()
-    window.title("123")
-    window.mainloop()
+    d = {1:"好123耶", 2:"好456耶", 3:"好我的妈耶"}
+    c = re.compile("好.*?耶")
+    print(len(re.findall(c, str(d.values()))))
+    print(len(d.values()))
