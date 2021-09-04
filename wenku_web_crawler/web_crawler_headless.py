@@ -113,7 +113,7 @@ def get_screenshot(num_of_pages, title, scr_path_, driver, work_queue):
     screen_height = 680  # 实际为730,截多一点
     page_height = driver.find_element(By.ID, "pageNo-1").size["height"]
     page_height_all = page_height * int(num_of_pages)
-    times = int(page_height_all / screen_height)  # FIXME 可能出错
+    times = int(page_height_all / screen_height) + 1  # FIXME 可能出错
     # type(num_of_pages) = str, 注意：文字文档和图档的页高并不相同
 
     work_queue[title] = "遍历文档"
@@ -141,16 +141,16 @@ def get_screenshot(num_of_pages, title, scr_path_, driver, work_queue):
                     h3 = driver.find_element(By.TAG_NAME, "body").size["height"]
                     h1, h2 = h2, h3
 
-    time.sleep(3)  # 此时页面中可能出现一些会自动消失的小贴士
-
-    if (i+2) * screen_height > 45000:  # 如果页面非常非常大
+    if (i+1) * screen_height > 45000:  # 如果页面非常非常大
         # 那就不可以直接截图，要分成好几块
-        page_num = (i+2) * screen_height // 25000 + 1  # 不知为何，总是会少掉2页
-        page_h = round((i+2) * screen_height / page_num, 2)
+        page_num = round((i+1) * screen_height / 25000) + 1  # i 应 +1
+        page_h = round((i+1) * screen_height / page_num, 2) + 50  # 防止误删除了正文内容
 
         work_queue[title] = "设置窗体大小"
 
         driver.set_window_size(width=1500, height=page_h)
+        time.sleep(1)  # 此时页面中可能出现一些会自动消失的小贴士
+
         for num in range(page_num):
             
             work_queue[title] = "截图中：{} / {}".format(num+1, page_num)
@@ -160,7 +160,11 @@ def get_screenshot(num_of_pages, title, scr_path_, driver, work_queue):
             make_path(scr_path_ + title + "//")
             scr_name = scr_path_ + title + "//" + str(num+1) + ".png"
             driver.get_screenshot_as_file(scr_name)  # 保存
-            process_thread = threading.Thread(target=just_body, args=(scr_name, {}, title))  # 另起一个线程进行图片处理
+            # just_body(scr_name, {}, title, many_img="last" if num == page_num-1 else "first" if num == 0 else"middle")
+            process_thread = threading.Thread(
+                target=just_body, args=(scr_name, {}, title), 
+                kwargs={"many_img" : "last" if num == page_num-1 else "first" if num == 0 else"middle"}
+                )  # 另起一个线程进行图片处理
             process_thread.start()
             # process_thread.join()
         
@@ -186,66 +190,76 @@ def get_screenshot(num_of_pages, title, scr_path_, driver, work_queue):
         work_queue[title] = "结束"
         del work_queue[title]
 
+    driver.quit()
 
-def just_body(scr_name, work_queue, title):
+
+def just_body(scr_name, work_queue, title, **kwargs):
     """
     只需要图片的内容部分，所以要对边框进行处理
     百度文库的正文内容背景色是纯白，边框一般是灰色(244,244,244)，但有时会换成其它图案
     因此，这里是通过把不是纯白的部分看成是边框并删除，以此达到去边框的效果
     同时必须先进行横向的去边框，因为横向的边框可能会对纵向的有较大影响
     """
+    if "many_img" in kwargs:
+        many_img = kwargs["many_img"]
+    else:
+        many_img = None
 
     scrshot = Image.open(scr_name)  # 打开图片
-    # 先从 横向 上方 开始
-    work_queue[title] = "去边框 横向 上方"
+    # 只有第一张图片需要去上方的边框
+    if not (many_img == "middle" or many_img == "last"):
+        # 先从 横向 上方 开始
+        work_queue[title] = "去边框 横向 上方"
 
-    l, w = scrshot.size
-    w_list = [i for i in range(w)][::4]  # 检测思路类似二分法，不过这里是每隔4像素检测一次
-    for i in w_list:
-        box = (0, i, l, i+1)
-        im = scrshot.crop(box)
-        pl0 = im.load()  # 获取像素点
-        point_list: list = [pl0[i, 0] for i in range(l)]
-        # 横向时，如果像素点列表中的白色数量大于列表长度的 1/2 ，则认为它是“正文 ”
-        if point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:
-            while True:  # 这时再向前寻找”边界“
-                i -= 1
-                box = (0, i, l, i + 1)
-                im = scrshot.crop(box)
-                pl0 = im.load()  # 获取像素点
-                point_list: list = [pl0[i, 0] for i in range(l)]
-                if not point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:  # 找到边界处的i值
-                    i += 1  # 这样截出来才是正文
-                    break  # 结束循环
-            box = (0, i, l, w)
-            scrshot = scrshot.crop(box)
-            break
+        l, w = scrshot.size
+        w_list = [i for i in range(w)][::4]  # 检测思路类似二分法，不过这里是每隔4像素检测一次
+        for i in w_list:
+            box = (0, i, l, i+1)
+            im = scrshot.crop(box)
+            pl0 = im.load()  # 获取像素点
+            point_list: list = [pl0[i, 0] for i in range(l)]
+            # 横向时，如果像素点列表中的白色数量大于列表长度的 1/2 ，则认为它是“正文 ”
+            if point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:
+                while True:  # 这时再向前寻找”边界“
+                    i -= 1
+                    box = (0, i, l, i + 1)
+                    im = scrshot.crop(box)
+                    pl0 = im.load()  # 获取像素点
+                    point_list: list = [pl0[i, 0] for i in range(l)]
+                    if not point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:  # 找到边界处的i值
+                        i += 1  # 这样截出来才是正文
+                        break  # 结束循环
+                box = (0, i, l, w)
+                scrshot = scrshot.crop(box)
+                break
 
     #  翻转图片
     scrshot = scrshot.rotate(180)
-    # 横向 下方
-    work_queue[title] = "去边框 横向 下方"
+    # 只有最后一张图片需要去下方的边框
+    if not (many_img == "first" or many_img == "middle"):
+        # 横向 下方
+        work_queue[title] = "去边框 横向 下方"
 
-    l, w = scrshot.size
-    w_list = [i for i in range(w)][::4]  # 检测思路类似二分法，不过这里是每隔4像素检测一次
-    for i in w_list:
-        box = (0, i, l, i + 1)
-        im = scrshot.crop(box)
-        pl0 = im.load()  # 获取像素点
-        point_list: list = [pl0[i, 0] for i in range(l)]
-        if point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:
-            while True:  # 这时再向前寻找”边界“
-                i -= 1
-                box = (0, i, l, i + 1)
-                im = scrshot.crop(box)
-                pl0 = im.load()  # 获取像素点
-                point_list: list = [pl0[i, 0] for i in range(l)]
-                if not point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:  # 找到边界处的i值
-                    i += 1  # 这样截出来才是正文
-                    break  # 结束循环
-            box = (0, i, l, w)
-            scrshot = scrshot.crop(box)
-            break
+        l, w = scrshot.size
+        w_list = [i for i in range(w)][::4]  # 检测思路类似二分法，不过这里是每隔4像素检测一次
+        for i in w_list:
+            box = (0, i, l, i + 1)
+            im = scrshot.crop(box)
+            pl0 = im.load()  # 获取像素点
+            point_list: list = [pl0[i, 0] for i in range(l)]
+            if point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:
+                while True:  # 这时再向前寻找”边界“
+                    i -= 1
+                    box = (0, i, l, i + 1)
+                    im = scrshot.crop(box)
+                    pl0 = im.load()  # 获取像素点
+                    point_list: list = [pl0[i, 0] for i in range(l)]
+                    if not point_list.count((255, 255, 255, 255)) >= len(point_list) / 2:  # 找到边界处的i值
+                        i += 1  # 这样截出来才是正文
+                        break  # 结束循环
+                box = (0, i, l, w)
+                scrshot = scrshot.crop(box)
+                break
 
     # 纵向 右侧，此时超过 2/3 才算判定成功
     work_queue[title] = "去边框 纵向 右侧"
@@ -301,23 +315,6 @@ def just_body(scr_name, work_queue, title):
     scrshot.save(scr_name)  # 直接保存
 
 
-def title_list_duplicate_removal(ID_list, scr_path):
-    # 针对标题的去重
-    have_had_id_list = os.listdir(scr_path)
-    have_had_id_list = [have_had_id_list[i].lower() for i in range(len(have_had_id_list))]  # 小写化
-    title_list: list = []
-    for i in range(len(ID_list)):
-        title_list.append(ID_list[i][1].lower() + ".png")  # 小写化
-    for i in range(len(title_list)):
-        title = title_list[i]
-        if title in have_had_id_list or title_list.count(title) > 1:  # 如果已存在
-            time_now = str(time.time()).split(".")
-            time_now = time_now[0] + time_now[1]
-            title = ID_list[i][1] + "_" + time_now  # 修改title（加上时间后缀）（此时不加.png，也无需小写）
-            ID_list[i][1] = title
-            time.sleep(0.1)  # 如果此时不暂停，那么可能在添加后缀之后文件名仍然相同（未判明）
-
-
 def web_crawler(wenku_id, title, num_of_pages, scr_path_, cookie_path, work_queue):
 
     try:
@@ -325,8 +322,8 @@ def web_crawler(wenku_id, title, num_of_pages, scr_path_, cookie_path, work_queu
         work_queue[title] = "开始"
 
         op = Options()
-        op.add_argument('--headless')
-        op.add_argument('--disable-gpu')
+        # op.add_argument('--headless')
+        # op.add_argument('--disable-gpu')
         op.add_argument('--log-level=4')
         driver = webdriver.Chrome(options=op)  # 用谷歌的无头浏览器
         get_clean_window(wenku_id=wenku_id, cookie_path=cookie_path,
@@ -407,7 +404,7 @@ class Crawler:
 
         i = 0
         while i < len(id_list):
-            if len(self.work_queue) < 10:  # 最大并发数为10
+            if len(self.work_queue) < 10:  # 最大并发数为 10
                 crawler_thread = threading.Thread(target=web_crawler,
                                                     args=(id_list[i][0], id_list[i][1], id_list[i][2],
                                                         scr_path_, cookie_path, self.work_queue))

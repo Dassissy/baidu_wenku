@@ -1,4 +1,5 @@
 from tkinter import *
+from tkinter import messagebox
 from web_crawler_headless import Crawler, make_path
 from web_crawler_headless import get_info
 import time, os, threading
@@ -61,6 +62,26 @@ def continue_this_part(x, y):  # 继续输入按钮
     entry_entry(x, y)  # 递归
 
 
+def title_list_duplicate_removal(ID_list, scr_path):
+    # 针对标题的去重
+    have_had_id_list = os.listdir(scr_path)
+    have_had_id_list = [
+        have_had_id_list[i].lower()
+        if len(have_had_id_list[i].split(".")) < 2 
+        else have_had_id_list[i].split(".")[0].lower() 
+        for i in range(len(have_had_id_list))
+        ]  # 小写化 + 去后缀
+    title_list: list = [ID_list[i][1].lower() for i in range(len(ID_list))]  # 小写化
+    for i in range(len(title_list)):
+        title = title_list[i]
+        if title in have_had_id_list or title_list.count(title) > 1:  # 如果已存在
+            time_now = str(time.time()).split(".")
+            time_now = time_now[0] + time_now[1]
+            title = ID_list[i][1] + "_" + time_now  # 修改title（加上时间后缀）（此时不加.png，也无需小写）
+            ID_list[i][1] = title
+            time.sleep(0.1)  # 如果此时不暂停，那么可能在添加后缀之后文件名仍然相同（未判明）
+
+
 def begin(x, y):  # 开始爬取
     global error_l, time_label, crawler  # 出错信息全局共享，时间信息方便删
     f_l.grid_forget()
@@ -82,18 +103,7 @@ def begin(x, y):  # 开始爬取
     if ID_list:
         # ID_list中，还要去掉重复的标题（包括在储存路径中存在的标题）
         scr_path_ = scr_path + scr_name + r"//"
-        have_had_id_list = os.listdir(scr_path+scr_name)
-        title_list: list = []
-        for i in range(len(ID_list)):
-            title_list.append(ID_list[i][1]+".png")
-        for i in range(len(title_list)):
-            title = title_list[i]
-            if title in have_had_id_list or title_list.count(title) > 1:  # 如果已存在
-                time_now = str(time.time()).split(".")
-                time_now = time_now[0] + time_now[1]
-                title = ID_list[i][1] + "_" + time_now  # 修改title（加上时间后缀）（此时不加.png）
-                ID_list[i][1] = title
-                time.sleep(0.1)  # 如果此时不暂停，那么可能在添加后缀之后文件名仍然相同
+        title_list_duplicate_removal(ID_list, scr_path + scr_name)
 
         crawler = Crawler(ID_list, scr_path_, cookie_path)  # 创建爬虫
         crawler.begin()  # 启动爬虫
@@ -138,7 +148,6 @@ def export_id(id_name_e):
             t, n = get_info(ID)
             ID_list.append("{}:{}/{}页".format(ID, t, n))
 
-    export_l = ''
     if ID_list:
         with open(Path, "w") as f:
             for ID in ID_list:
@@ -146,8 +155,7 @@ def export_id(id_name_e):
             f.close()
             
     else:
-        export_l = Label(main_entry_frame, text="无id！！")
-        export_l.grid(column=4, row=2)
+        messagebox.showerror("出错了！", "没有合法的id！")
         
         
 def import_id(id_path_e, id_name_e):
